@@ -135,7 +135,7 @@ def main():
         report["status"] = "SECRET_MISSING_IN_ACTIONS"
         report["results"] = [{"post_id": f"{p['owner']}_{p['post']}", "status": "UNVERIFIED"} for p in posts]
     else:
-        report["results"] = [inspect_one(p, token) for p in POSTS]
+        report["results"] = [inspect_one(p, token) for p in posts]
         report["status"] = "TEST_COMPLETE"
     with open("vk-shops-api-report.json", "w", encoding="utf-8") as file:
         json.dump(report, file, ensure_ascii=False, indent=2)
