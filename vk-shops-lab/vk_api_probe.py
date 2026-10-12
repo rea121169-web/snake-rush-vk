@@ -147,9 +147,9 @@ def public_ozon_links(item):
                 visit(child)
         elif isinstance(value, str):
             decoded = urllib.parse.unquote(value)
-            for raw in re.findall(r"https?://(?:www\\.)?ozon\\.ru/product/[^\\s<>\\\"\\\\]+", decoded):
+            for raw in re.findall(r'https?://(?:www\.)?ozon\.ru/product/[^\s<>"\\]+', decoded):
                 path = urllib.parse.urlsplit(raw).path.rstrip("/")
-                match = re.search(r"(?:/|-)(\\d{6,14})$", path)
+                match = re.search(r"(?:/|-)(\d{6,14})$", path)
                 if match:
                     sku = match.group(1)
                     found[sku] = "https://ozon.ru/product/" + sku
@@ -196,7 +196,7 @@ def discover_public_posts(token):
         rows = list(csv.DictReader(source))
     owners = []
     for row in rows:
-        match = re.search(r"wall(-?\\d+)_(\\d+)", row.get("post_url", ""))
+        match = re.search(r"wall(-?\d+)_(\d+)", row.get("post_url", ""))
         if match and int(match.group(1)) not in owners:
             owners.append(int(match.group(1)))
     discovered = []
@@ -226,7 +226,7 @@ def discover_public_posts(token):
                        "posts_returned": len(items), "accepted_new_product_posts": len(accepted)})
     # Explicit post references from the register are also checked, including previously blank SKU rows.
     for row in rows:
-        match = re.search(r"wall(-?\\d+)_(\\d+)", row.get("post_url", ""))
+        match = re.search(r"wall(-?\d+)_(\d+)", row.get("post_url", ""))
         if not match:
             continue
         pid = f"{match.group(1)}_{match.group(2)}"
