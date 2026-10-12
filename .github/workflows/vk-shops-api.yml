@@ -1,0 +1,29 @@
+name: VK Shops official API test
+on:
+  push:
+    branches: [vk-shops-verifier-lab]
+    paths:
+      - 'vk-shops-lab/vk_api_probe.py'
+      - '.github/workflows/vk-shops-api.yml'
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      VK_SERVICE_TOKEN: ${{ secrets.VK_SERVICE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate script syntax
+        run: python3 -m py_compile vk-shops-lab/vk_api_probe.py
+      - name: Verify two control posts by official VK API
+        run: python3 vk-shops-lab/vk_api_probe.py
+      - name: Upload redacted report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vk-shops-api-report
+          path: vk-shops-api-report.json
+          if-no-files-found: ignore
+          retention-days: 3
