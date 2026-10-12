@@ -1,0 +1,21 @@
+name: VK Shops mobile Chromium smoke test
+on:
+  push:
+    branches:
+      - vk-shops-verifier-lab
+    paths:
+      - '.github/workflows/vk-shops-chromium.yml'
+permissions:
+  contents: read
+jobs:
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Chromium browser driver
+        run: |
+          python3 -m pip install -q playwright
+          python3 -m playwright install --with-deps chromium
+      - name: Test real mobile rendering
+        run: python3 vk-shops-lab/chromium_probe.py
