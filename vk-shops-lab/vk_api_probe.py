@@ -126,6 +126,126 @@ def load_candidates():
             selected.append({"owner":int(match[1]),"post":int(match[2]),"sku":sku,"prior_views":"not checked"})
     return selected
 
+
+# VK SHOPS V5: discover public product posts for the authorized eight-case pack.
+import time
+
+USED_SKUS = {
+    "2438903294", "3210776803", "3843402249", "1956626965",
+    "1613218722", "851843173", "3093383856", "1196752643",
+    "2834734941", "3858982397",
+}
+
+def public_ozon_links(item):
+    found = {}
+    def visit(value):
+        if isinstance(value, dict):
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+        elif isinstance(value, str):
+            decoded = urllib.parse.unquote(value)
+            for raw in re.findall(r"https?://(?:www\\.)?ozon\\.ru/product/[^\\s<>\\\"\\\\]+", decoded):
+                path = urllib.parse.urlsplit(raw).path.rstrip("/")
+                match = re.search(r"(?:/|-)(\\d{6,14})$", path)
+                if match:
+                    sku = match.group(1)
+                    found[sku] = "https://ozon.ru/product/" + sku
+    visit(item)
+    return found
+
+def describe_public_post(item, group_name, checked):
+    owner = item.get("owner_id", item.get("from_id"))
+    post_id = item.get("id")
+    timestamp = item.get("date")
+    if not all(isinstance(x, int) for x in (owner, post_id, timestamp)):
+        return None
+    published = dt.datetime.fromtimestamp(timestamp, dt.timezone.utc)
+    elapsed = checked - published
+    views = get_count(item, "views")
+    if not isinstance(views, int) or views <= 10000 or not dt.timedelta(0) <= elapsed <= dt.timedelta(days=21):
+        return None
+    if item.get("marked_as_ads") != 1:
+        return None
+    links = public_ozon_links(item)
+    if not links or all(sku in USED_SKUS for sku in links):
+        return None
+    return {
+        "post_id": f"{owner}_{post_id}",
+        "owner_id": owner, "source_group": group_name,
+        "public_url": f"https://vk.ru/wall{owner}_{post_id}",
+        "published_utc": published.isoformat(),
+        "views": views,
+        "reactions": get_count(item, "likes"),
+        "reposts": get_count(item, "reposts"),
+        "comments": get_count(item, "comments"),
+        "marked_as_ads": 1,
+        "ozon_products": [
+            {"ozon_sku": sku, "ozon_url": url}
+            for sku, url in links.items() if sku not in USED_SKUS
+        ],
+        "source_text": item.get("text", ""),
+        "checked_utc": checked.isoformat(),
+    }
+
+def discover_public_posts(token):
+    checked = dt.datetime.now(dt.timezone.utc)
+    with open("vk-shops-lab/candidates.csv", encoding="utf-8", newline="") as source:
+        rows = list(csv.DictReader(source))
+    owners = []
+    for row in rows:
+        match = re.search(r"wall(-?\\d+)_(\\d+)", row.get("post_url", ""))
+        if match and int(match.group(1)) not in owners:
+            owners.append(int(match.group(1)))
+    discovered = []
+    checks = []
+    # These are only the already-observed public communities in our candidate register.
+    for owner in owners[:18]:
+        data = request("wall.get", {"owner_id": owner, "count": 100, "filter": "owner", "extended": 1}, token)
+        time.sleep(0.4)
+        if "local_error" in data:
+            checks.append({"owner_id": owner, "status": "NETWORK_ERROR", "detail": data["local_error"]})
+            continue
+        if "error" in data:
+            code = data["error"].get("error_code")
+            checks.append({"owner_id": owner, "status": "API_ERROR", "error_code": code, "detail": error_description(code)})
+            continue
+        response = data.get("response", {})
+        names = {group.get("id"): group.get("name") for group in response.get("groups", [])}
+        group_name = names.get(abs(owner))
+        items = resolve_posts(data)
+        accepted = []
+        for item in items:
+            candidate = describe_public_post(item, group_name, checked)
+            if candidate is not None:
+                accepted.append(candidate)
+        discovered.extend(accepted)
+        checks.append({"owner_id": owner, "source_group": group_name, "status": "CHECKED",
+                       "posts_returned": len(items), "accepted_new_product_posts": len(accepted)})
+    # Explicit post references from the register are also checked, including previously blank SKU rows.
+    for row in rows:
+        match = re.search(r"wall(-?\\d+)_(\\d+)", row.get("post_url", ""))
+        if not match:
+            continue
+        pid = f"{match.group(1)}_{match.group(2)}"
+        data = request("wall.getById", {"posts": pid, "extended": 1}, token)
+        time.sleep(0.4)
+        if "error" in data or "local_error" in data:
+            continue
+        response = data.get("response", {})
+        names = {group.get("id"): group.get("name") for group in response.get("groups", [])} if isinstance(response, dict) else {}
+        for item in resolve_posts(data):
+            if str(item.get("id")) != match.group(2) or str(item.get("owner_id")) != match.group(1):
+                continue
+            candidate = describe_public_post(item, names.get(abs(int(match.group(1)))), checked)
+            if candidate is not None:
+                discovered.append(candidate)
+    unique = {item["post_id"]: item for item in discovered}
+    return {"checked_utc": checked.isoformat(), "communities": checks, "posts": list(unique.values())}
+
+
 def main():
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     token = os.getenv("VK_SERVICE_TOKEN", "").strip()
@@ -137,6 +257,7 @@ def main():
     else:
         report["results"] = [inspect_one(p, token) for p in posts]
         report["status"] = "TEST_COMPLETE"
+        report["discovery"] = discover_public_posts(token)
     with open("vk-shops-api-report.json", "w", encoding="utf-8") as file:
         json.dump(report, file, ensure_ascii=False, indent=2)
     print("VK_SHOPS_API_REPORT_START")
