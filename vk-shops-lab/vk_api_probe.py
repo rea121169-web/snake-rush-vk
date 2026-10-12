@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only VK wall.getById batch verification. Never print URLs containing the token."""
+"""Read-only VK wall.getById batch verification. Guard secret in all output."""
 import csv
 import datetime as dt
 import json
