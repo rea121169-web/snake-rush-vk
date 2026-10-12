@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Read-only VK wall.getById smoke test. Never print URLs containing the token."""
+import csv
 import datetime as dt
 import json
 import os
@@ -9,7 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-POSTS = [
+DEFAULT_POSTS = [
     {"owner": -224838397, "post": 52150, "sku": "2438903294",
      "prior_views": "52.9K observed by user 2026-10-12"},
     {"owner": -226819393, "post": 26471, "sku": "3210776803",
@@ -114,13 +115,25 @@ def inspect_one(expected, token):
         result["status"] = "VIEWS_VERIFIED"
     return result
 
+def load_candidates():
+    with open("vk-shops-lab/candidates.csv", encoding="utf-8", newline="") as source:
+        rows=list(csv.DictReader(source))
+    selected=[]
+    for row in rows[:50]:
+        match=re.search(r"wall(-?\d+)_(\d+)",row.get("post_url",""))
+        sku=row.get("ozon_sku","").strip()
+        if match and sku:
+            selected.append({"owner":int(match[1]),"post":int(match[2]),"sku":sku,"prior_views":"not checked"})
+    return selected
+
 def main():
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     token = os.getenv("VK_SERVICE_TOKEN", "").strip()
+    posts=load_candidates()
     report = {"checked_utc": now, "secret_provided": bool(token), "results": []}
     if not token:
         report["status"] = "SECRET_MISSING_IN_ACTIONS"
-        report["results"] = [{"post_id": f"{p['owner']}_{p['post']}", "status": "UNVERIFIED"} for p in POSTS]
+        report["results"] = [{"post_id": f"{p['owner']}_{p['post']}", "status": "UNVERIFIED"} for p in posts]
     else:
         report["results"] = [inspect_one(p, token) for p in POSTS]
         report["status"] = "TEST_COMPLETE"
