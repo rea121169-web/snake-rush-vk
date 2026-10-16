@@ -107,7 +107,7 @@ def inspect_one(expected, token):
     )
     if result["views"] is None:
         result["status"] = "POST_FOUND_NO_VIEWS"
-    elif result["views"] <= 10000:
+    elif result["views"] <= 50000:
         result["status"] = "REJECT_UNDER_VIEWS_THRESHOLD"
     elif age_days is None or age_days < 0 or age_days > 21:
         result["status"] = "REJECT_DATE"
@@ -127,13 +127,15 @@ def load_candidates():
     return selected
 
 
-# VK SHOPS V5: discover public product posts for the authorized eight-case pack.
+# VK SHOPS V5: fresh public source posts above 50,000 views; price checked separately on Ozon.
 import time
 
 USED_SKUS = {
     "2438903294", "3210776803", "3843402249", "1956626965",
     "1613218722", "851843173", "3093383856", "1196752643",
     "2834734941", "3858982397",
+    "1875254493", "1404253192", "2864668123", "3521161250",
+    "2195916581", "1926742046", "2317789406", "5827491783",
 }
 
 def public_ozon_links(item):
@@ -165,7 +167,7 @@ def describe_public_post(item, group_name, checked):
     published = dt.datetime.fromtimestamp(timestamp, dt.timezone.utc)
     elapsed = checked - published
     views = get_count(item, "views")
-    if not isinstance(views, int) or views <= 10000 or not dt.timedelta(0) <= elapsed <= dt.timedelta(days=21):
+    if not isinstance(views, int) or views <= 50000 or not dt.timedelta(0) <= elapsed <= dt.timedelta(days=21):
         return None
     if item.get("marked_as_ads") != 1:
         return None
